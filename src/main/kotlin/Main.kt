@@ -10,6 +10,7 @@ import java.nio.file.Paths
 import java.util.*
 import javax.imageio.ImageIO
 import kotlin.math.pow
+import kotlin.math.roundToInt
 import kotlin.system.exitProcess
 
 
@@ -70,7 +71,7 @@ class LameCompressor(private val pathToLame: String) {
 
     fun compressFile(inputFile: File): File {
         val outputFile = File("${inputFile.parent}/${UUID.randomUUID()}.mp3")
-        val command = "$pathToLame -r --unsigned -s 8 -q 2 --bitwidth 8 -m m ${inputFile.absolutePath} ${outputFile.absolutePath}"
+        val command = "$pathToLame -r -s 8 -q 1 --highpass-width --lowpass-width --bitwidth 8 -b 8 -B 16 -m f ${inputFile.absolutePath} ${outputFile.absolutePath}"
         println("Started $command")
         val process = ProcessBuilder(*command.split(" ").toTypedArray())
             .redirectOutput(ProcessBuilder.Redirect.INHERIT)
@@ -82,7 +83,7 @@ class LameCompressor(private val pathToLame: String) {
 
     fun decompressFile(inputFile: File): File {
         val outputFile = File("${inputFile.parent}/dec_${UUID.randomUUID()}.bin")
-        val command = "$pathToLame --decode -x -t ${inputFile.absolutePath} ${outputFile.absolutePath}"
+        val command = "$pathToLame -S --decode --brief -x -t ${inputFile.absolutePath} ${outputFile.absolutePath}"
         println("Started $command")
 
         val process = ProcessBuilder(*command.split(" ").toTypedArray())
@@ -152,6 +153,23 @@ class ImageOperations {
         }
         return flattened.toTypedArray()
     }
+
+    fun shiftImage(matrix: Array<Array<Array<Int>>>, shift: Int): Array<Array<Array<Int>>> {
+        val height = matrix.size
+        val width = matrix[0].size
+        val depth = matrix[0][0].size
+        val newMatrix = Array(height) { Array(width) { Array(depth) { 0 } } }
+
+        for (h in 0 until height) {
+            val newH = (h + shift) % height
+            for (w in 0 until width) {
+                for (d in 0 until depth) {
+                    newMatrix[newH][w][d] = matrix[h][w][d]
+                }
+            }
+        }
+        return newMatrix
+    }
 }
 
 
@@ -180,11 +198,15 @@ class GleitzschOperator(private val imageOperations: ImageOperations, private va
             val flatChannel = imageOperations.flattenChannel(channel)
             val byteArray = flatChannel.map { it.toByte() }.toByteArray()
             val tempFile = Paths.get("$tmpDir/${channelNum}_${UUID.randomUUID()}.bin").toFile()
+            val origSize = byteArray.size
             Files.write(tempFile.toPath(), byteArray)
 
             val compressedFile = lameCompressor.compressFile(tempFile)
             val decompressedFile = lameCompressor.decompressFile(compressedFile)
             val decompressedByteArray = Files.readAllBytes(decompressedFile.toPath())
+            val newSize = decompressedByteArray.size
+            println("Orig: ${origSize}; lame-ed array size: ${newSize}; approx ${(newSize / origSize).toInt()} bigger")
+
             val decompressedBytesArray = decompressedByteArray.toList().chunked(2).take(byteArray.size).map { it[0] }.toByteArray()
 
             var index = 0
@@ -199,7 +221,9 @@ class GleitzschOperator(private val imageOperations: ImageOperations, private va
             Files.deleteIfExists(decompressedFile.toPath())
         }
 
-        return glitzschedArray
+        val shift = (shape.first / 2.2).roundToInt()
+        return imageOperations.shiftImage(glitzschedArray, 0)
+        // return glitzschedArray
     }
 }
 
