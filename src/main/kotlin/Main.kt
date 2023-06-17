@@ -34,7 +34,12 @@ class ImageProcessor {
 
         val scaledImage = BufferedImage(newWidth, newHeight, BufferedImage.TYPE_INT_RGB)
         val g = scaledImage.createGraphics()
-        g.drawImage(image.getScaledInstance(newWidth, newHeight, Image.SCALE_SMOOTH), 0, 0, null)
+        g.drawImage(image.getScaledInstance(newWidth,
+                                            newHeight,
+                                            Image.SCALE_SMOOTH),
+                                         0,
+                                         0,
+                                   null)
         g.dispose()
 
         return scaledImage
@@ -58,7 +63,13 @@ class ImageProcessor {
                 val r = gammaCorrectionLookup[pixel shr 16 and 0xFF]
                 val g = gammaCorrectionLookup[pixel shr 8 and 0xFF]
                 val b = gammaCorrectionLookup[pixel and 0xFF]
-                newImage.setRGB(x, y, (a shl 24) or ((r.toInt() and 0xFF) shl 16) or ((g.toInt() and 0xFF) shl 8) or (b.toInt() and 0xFF))
+
+                val alpha = a shl 24
+                val red = (r.toInt() and 0xFF) shl 16
+                val green = (g.toInt() and 0xFF) shl 8
+                val blue = b.toInt() and 0xFF
+
+                newImage.setRGB(x, y, alpha or red or green or blue)
             }
         }
 
@@ -71,7 +82,21 @@ class LameCompressor(private val pathToLame: String) {
 
     fun compressFile(inputFile: File): File {
         val outputFile = File("${inputFile.parent}/${UUID.randomUUID()}.mp3")
-        val command = "$pathToLame -r -s 8 -q 1 --highpass-width --lowpass-width --bitwidth 8 -b 8 -B 16 -m f ${inputFile.absolutePath} ${outputFile.absolutePath}"
+        val command = StringBuilder()
+            .append(pathToLame)
+            .append(" -r")
+            .append(" -s 8")
+            .append(" -q 1")
+            .append(" --highpass-width")
+            .append(" --lowpass-width")
+            .append(" --bitwidth 8")
+            .append(" -b 8")
+            .append(" -B 16")
+            .append(" -m f")
+            .append(" ${inputFile.absolutePath}")
+            .append(" ${outputFile.absolutePath}")
+            .toString()
+
         println("Started $command")
         val process = ProcessBuilder(*command.split(" ").toTypedArray())
             .redirectOutput(ProcessBuilder.Redirect.INHERIT)
@@ -170,19 +195,44 @@ class ImageOperations {
         }
         return newMatrix
     }
+
+    fun percentile(arr: IntArray, percentile: Double): Int {
+        val index = (percentile / 100) * arr.size
+        return arr.sorted()[index.toInt()]
+    }
+
+    fun rescaleIntensity(image: Array<Array<Array<Int>>>, inRange: Pair<Int, Int>): Array<Array<Array<Int>>>
+    {
+        val (low, high) = inRange
+        val scaleFactor = 255.0 / (high - low)
+        return image.map { layer ->
+            layer.map { row ->
+                row.map { pixel ->
+                    ((pixel - low) * scaleFactor).coerceIn(0.0, 255.0).toInt()
+                }.toTypedArray()
+            }.toTypedArray()
+        }.toTypedArray()
+    }
 }
 
 
-class GleitzschOperator(private val imageOperations: ImageOperations, private val lameCompressor: LameCompressor) {
-
+class GleitzschOperator(private val imageOperations: ImageOperations,
+                        private val lameCompressor: LameCompressor)
+{
     // Your Gleitzsch operation methods go here
     fun apply(image: BufferedImage, tmpDir: String): BufferedImage {
         val origRgbArray = imageOperations.transformTo3DArray(image)
         val gleitzschedArr = doGleitzsch(origRgbArray, tmpDir)
-        return imageOperations.arrayToImage(gleitzschedArr)
+        // Flatten the 3D array into 1D array for percentile calculations
+        val flattenedGlitchedImage = gleitzschedArr.flatten().flatMap { it.toList() }.toIntArray()
+        val low = imageOperations.percentile(flattenedGlitchedImage, 5.0)
+        val high = imageOperations.percentile(flattenedGlitchedImage, 95.0)
+        val highContrastArr = imageOperations.rescaleIntensity(gleitzschedArr, Pair(low, high))
+        return imageOperations.arrayToImage(highContrastArr)
     }
 
-    private fun doGleitzsch(imageArr: Array<Array<Array<Int>>>, tmpDir: String): Array<Array<Array<Int>>> {
+    private fun doGleitzsch(imageArr: Array<Array<Array<Int>>>, tmpDir: String): Array<Array<Array<Int>>>
+    {
         val shape = Triple(imageArr.size, imageArr[0].size, imageArr[0][0].size)
         println("Original array shape: $shape")
 
@@ -197,7 +247,8 @@ class GleitzschOperator(private val imageOperations: ImageOperations, private va
             println("$channelNum channel shape: ${channel.size}x${channel[0].size}")
             val flatChannel = imageOperations.flattenChannel(channel)
             val byteArray = flatChannel.map { it.toByte() }.toByteArray()
-            val tempFile = Paths.get("$tmpDir/${channelNum}_${UUID.randomUUID()}.bin").toFile()
+            val tempFile = Paths.get("$tmpDir/${channelNum}_${UUID.randomUUID()}.bin")
+                .toFile()
             val origSize = byteArray.size
             Files.write(tempFile.toPath(), byteArray)
 
@@ -205,9 +256,18 @@ class GleitzschOperator(private val imageOperations: ImageOperations, private va
             val decompressedFile = lameCompressor.decompressFile(compressedFile)
             val decompressedByteArray = Files.readAllBytes(decompressedFile.toPath())
             val newSize = decompressedByteArray.size
-            println("Orig: ${origSize}; lame-ed array size: ${newSize}; approx ${(newSize / origSize).toInt()} bigger")
+            println(
+                "Orig: ${origSize}; " +
+                "lame-ed array size: ${newSize}; " +
+                "approx ${(newSize / origSize).toInt()} bigger"
+            )
 
-            val decompressedBytesArray = decompressedByteArray.toList().chunked(2).take(byteArray.size).map { it[0] }.toByteArray()
+            val decompressedBytesArray = decompressedByteArray
+                .toList()
+                .chunked(2)
+                .take(byteArray.size)
+                .map { it[0] }
+                .toByteArray()
 
             var index = 0
             for (j in channel[0].indices) {
@@ -221,8 +281,8 @@ class GleitzschOperator(private val imageOperations: ImageOperations, private va
             Files.deleteIfExists(decompressedFile.toPath())
         }
 
-        val shift = (shape.first / 2.2).roundToInt()
-        return imageOperations.shiftImage(glitzschedArray, 0)
+        val shift = shape.first - (shape.first / 8.0).roundToInt()
+        return imageOperations.shiftImage(glitzschedArray, shift)
         // return glitzschedArray
     }
 }
@@ -239,9 +299,13 @@ class Application {
         val parser = ArgParser("GleitzschOperator")
         val inputImagePath by parser.argument(ArgType.String, description = "Path to the input image")
         val outputImagePath by parser.argument(ArgType.String, description = "Path to the output image")
-        val imageSize by parser.option(ArgType.Int, description = "Size of the image").default(1024)
-        val tempDir by parser.option(ArgType.String, description = "Path to the temp directory").default("tmpDir")
-        val rgbShift by parser.option(ArgType.Int, description = "RGB shift to be applied").default(8)
+        val imageSize by parser.option(ArgType.Int, description = "Size of the image")
+            .default(1024)
+        val tempDir by parser.option(ArgType.String,
+            description = "Path to the temp directory")
+            .default("tmpDir")
+        val rgbShift by parser.option(ArgType.Int, description = "RGB shift to be applied")
+            .default(8)
 
         parser.parse(args)
         // Your application logic goes here
