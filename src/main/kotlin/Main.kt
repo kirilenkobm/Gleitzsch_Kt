@@ -13,6 +13,8 @@ import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.system.exitProcess
 
+const val DEFAULT_GAMMA = 10.0
+const val DEFAULT_SHIFT_DENOMINATOR = 8.0
 
 class ImageProcessor {
     // Potentially to rearrange together with ImageOperations
@@ -20,7 +22,7 @@ class ImageProcessor {
     fun loadImage(path: String, size: Int): BufferedImage {
         val origImage = ImageIO.read(File(path))
         val rescaledImage = rescaleImage(origImage, size)
-        return adjustGamma(rescaledImage, 10.0)
+        return adjustGamma(rescaledImage, DEFAULT_GAMMA)
     }
 
     fun saveImage(image: BufferedImage, path: String) {
@@ -220,9 +222,9 @@ class GleitzschOperator(private val imageOperations: ImageOperations,
                         private val lameCompressor: LameCompressor)
 {
     // Your Gleitzsch operation methods go here
-    fun apply(image: BufferedImage, tmpDir: String): BufferedImage {
+    fun apply(image: BufferedImage, tmpDir: String, rgbShift: Int): BufferedImage {
         val origRgbArray = imageOperations.transformTo3DArray(image)
-        val gleitzschedArr = doGleitzsch(origRgbArray, tmpDir)
+        val gleitzschedArr = doGleitzsch(origRgbArray, tmpDir, rgbShift)
         // Flatten the 3D array into 1D array for percentile calculations
         val flattenedGlitchedImage = gleitzschedArr.flatten().flatMap { it.toList() }.toIntArray()
         val low = imageOperations.percentile(flattenedGlitchedImage, 5.0)
@@ -231,7 +233,11 @@ class GleitzschOperator(private val imageOperations: ImageOperations,
         return imageOperations.arrayToImage(highContrastArr)
     }
 
-    private fun doGleitzsch(imageArr: Array<Array<Array<Int>>>, tmpDir: String): Array<Array<Array<Int>>>
+    private fun doGleitzsch(
+        imageArr: Array<Array<Array<Int>>>,
+        tmpDir: String,
+        rgbShift: Int
+    ): Array<Array<Array<Int>>>
     {
         val shape = Triple(imageArr.size, imageArr[0].size, imageArr[0][0].size)
         println("Original array shape: $shape")
@@ -244,6 +250,7 @@ class GleitzschOperator(private val imageOperations: ImageOperations,
 
         for (channelNum in 0..2) {
             val channel = imageOperations.extractChannel(imageArr, channelNum)
+            val appliedShiftVal = rgbShift * channelNum
             println("$channelNum channel shape: ${channel.size}x${channel[0].size}")
             val flatChannel = imageOperations.flattenChannel(channel)
             val byteArray = flatChannel.map { it.toByte() }.toByteArray()
@@ -259,7 +266,7 @@ class GleitzschOperator(private val imageOperations: ImageOperations,
             println(
                 "Orig: ${origSize}; " +
                 "lame-ed array size: ${newSize}; " +
-                "approx ${(newSize / origSize).toInt()} bigger"
+                "approx ${(newSize / origSize)} bigger"
             )
 
             val decompressedBytesArray = decompressedByteArray
@@ -281,9 +288,8 @@ class GleitzschOperator(private val imageOperations: ImageOperations,
             Files.deleteIfExists(decompressedFile.toPath())
         }
 
-        val shift = shape.first - (shape.first / 8.0).roundToInt()
+        val shift = shape.first - (shape.first / DEFAULT_SHIFT_DENOMINATOR).roundToInt()
         return imageOperations.shiftImage(glitzschedArray, shift)
-        // return glitzschedArray
     }
 }
 
@@ -308,11 +314,9 @@ class Application {
             .default(8)
 
         parser.parse(args)
-        // Your application logic goes here
-
 
         val image = processor.loadImage(inputImagePath, imageSize)
-        val result = gleitzschOperator.apply(image, tempDir)
+        val result = gleitzschOperator.apply(image, tempDir, rgbShift)
         processor.saveImage(result, outputImagePath)
     }
 
