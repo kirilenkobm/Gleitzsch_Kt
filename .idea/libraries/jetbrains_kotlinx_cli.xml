@@ -1,0 +1,10 @@
+<component name="libraryTable">
+  <library name="jetbrains.kotlinx.cli" type="repository">
+    <properties maven-id="org.jetbrains.kotlinx:kotlinx-cli:0.3.5" />
+    <CLASSES>
+      <root url="jar://$MAVEN_REPOSITORY$/org/jetbrains/kotlinx/kotlinx-cli/0.3.5/kotlinx-cli-0.3.5.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>
