@@ -13,5 +13,6 @@
     <orderEntry type="library" name="KotlinJavaRuntime" level="project" />
     <orderEntry type="library" name="jetbrains.kotlinx.cli" level="project" />
     <orderEntry type="library" name="jetbrains.kotlinx.cli.jvm" level="project" />
+    <orderEntry type="library" name="jetbrains.kotlinx.coroutines.core" level="project" />
   </component>
 </module>

@@ -2,6 +2,10 @@
 import kotlinx.cli.ArgParser
 import kotlinx.cli.ArgType
 import kotlinx.cli.default
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.runBlocking
 import java.awt.Image
 import java.awt.image.BufferedImage
 import java.io.File
@@ -39,9 +43,9 @@ class ImageProcessor {
         g.drawImage(image.getScaledInstance(newWidth,
                                             newHeight,
                                             Image.SCALE_SMOOTH),
-                                         0,
-                                         0,
-                                   null)
+                                            0,
+                                            0,
+                                            null)
         g.dispose()
 
         return scaledImage
@@ -82,8 +86,8 @@ class ImageProcessor {
 
 class LameCompressor(private val pathToLame: String) {
 
-    fun compressFile(inputFile: File): File {
-        val outputFile = File("${inputFile.parent}/${UUID.randomUUID()}.mp3")
+    fun compressFile(inputFile: File, channelNum: Int): File {
+        val outputFile = File("${inputFile.parent}/${channelNum}_${UUID.randomUUID()}.mp3")
         val command = StringBuilder()
             .append(pathToLame)
             .append(" -r")
@@ -108,8 +112,8 @@ class LameCompressor(private val pathToLame: String) {
         return outputFile
     }
 
-    fun decompressFile(inputFile: File): File {
-        val outputFile = File("${inputFile.parent}/dec_${UUID.randomUUID()}.bin")
+    fun decompressFile(inputFile: File, channelNum: Int): File {
+        val outputFile = File("${inputFile.parent}/${channelNum}_dec_${UUID.randomUUID()}.bin")
         val command = "$pathToLame -S --decode --brief -x -t ${inputFile.absolutePath} ${outputFile.absolutePath}"
         println("Started $command")
 
@@ -218,6 +222,14 @@ class ImageOperations {
 }
 
 
+data class ChannelData(
+    val decompressedBytes: ByteArray,
+    val byteArraySize: Int,
+    val channelIndices: IntRange,
+    val channelZeroIndices: IntRange
+)
+
+
 class GleitzschOperator(private val imageOperations: ImageOperations,
                         private val lameCompressor: LameCompressor)
 {
@@ -248,45 +260,71 @@ class GleitzschOperator(private val imageOperations: ImageOperations,
             }
         }
 
+        val decompressedData = arrayOfNulls<ChannelData>(3)
+
+        runBlocking {
+            val jobs = (0..2).map { channelNum ->
+                async(Dispatchers.IO) {
+                    val channel = imageOperations.extractChannel(imageArr, channelNum)
+                    val appliedShiftVal = rgbShift * channelNum
+                    println("$channelNum channel shape: ${channel.size}x${channel[0].size}")
+                    val flatChannel = imageOperations.flattenChannel(channel)
+                    val byteArray = flatChannel.map { it.toByte() }.toByteArray()
+                    val tempFile = Paths.get("$tmpDir/${channelNum}_${UUID.randomUUID()}.bin")
+                        .toFile()
+//                    val origSize = byteArray.size
+                    Files.write(tempFile.toPath(), byteArray)
+
+                    val compressedFile = lameCompressor.compressFile(tempFile, channelNum)
+                    val decompressedFile = lameCompressor.decompressFile(compressedFile, channelNum)
+
+                    val decompressedByteArray = Files.readAllBytes(decompressedFile.toPath())
+                    val byteArraySize = byteArray.size
+                    val channelIndices = channel.indices
+                    val channelZeroIndices = channel[0].indices
+//                    val newSize = decompressedByteArray.size
+//                    println(
+//                        "Orig: ${origSize}; " +
+//                                "lame-ed array size: ${newSize}; " +
+//                                "approx ${(newSize / origSize)} bigger"
+//                    )
+
+                    // Store the decompressed data for later use
+                    val result = ChannelData(
+                        decompressedBytes = decompressedByteArray,
+                        byteArraySize = byteArraySize,
+                        channelIndices = channelIndices,
+                        channelZeroIndices = channelZeroIndices
+                    )
+                    decompressedData[channelNum] = result
+
+                    Files.deleteIfExists(tempFile.toPath())
+                    Files.deleteIfExists(compressedFile.toPath())
+                    Files.deleteIfExists(decompressedFile.toPath())
+                }
+            }
+            jobs.awaitAll()
+        }
+
+        // Populate Gleitsched Array
         for (channelNum in 0..2) {
-            val channel = imageOperations.extractChannel(imageArr, channelNum)
-            val appliedShiftVal = rgbShift * channelNum
-            println("$channelNum channel shape: ${channel.size}x${channel[0].size}")
-            val flatChannel = imageOperations.flattenChannel(channel)
-            val byteArray = flatChannel.map { it.toByte() }.toByteArray()
-            val tempFile = Paths.get("$tmpDir/${channelNum}_${UUID.randomUUID()}.bin")
-                .toFile()
-            val origSize = byteArray.size
-            Files.write(tempFile.toPath(), byteArray)
-
-            val compressedFile = lameCompressor.compressFile(tempFile)
-            val decompressedFile = lameCompressor.decompressFile(compressedFile)
-            val decompressedByteArray = Files.readAllBytes(decompressedFile.toPath())
-            val newSize = decompressedByteArray.size
-            println(
-                "Orig: ${origSize}; " +
-                "lame-ed array size: ${newSize}; " +
-                "approx ${(newSize / origSize)} bigger"
-            )
-
-            val decompressedBytesArray = decompressedByteArray
+            val data = decompressedData[channelNum]!!
+            val decompressedBytesArray = data.decompressedBytes
                 .toList()
                 .chunked(2)
-                .take(byteArray.size)
+                .take(data.byteArraySize)
                 .map { it[0] }
                 .toByteArray()
 
             var index = 0
-            for (j in channel[0].indices) {
-                for (i in channel.indices) {
+            for (j in data.channelZeroIndices) {
+                for (i in data.channelIndices) {
                     glitzschedArray[i][j][channelNum] = decompressedBytesArray[index].toInt() and 0xFF
                     index += 1
                 }
             }
-            Files.deleteIfExists(tempFile.toPath())
-            Files.deleteIfExists(compressedFile.toPath())
-            Files.deleteIfExists(decompressedFile.toPath())
         }
+
 
         val shift = shape.first - (shape.first / DEFAULT_SHIFT_DENOMINATOR).roundToInt()
         return imageOperations.shiftImage(glitzschedArray, shift)
