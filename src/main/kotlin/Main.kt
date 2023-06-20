@@ -25,8 +25,11 @@ class ImageProcessor {
     // Potentially to rearrange together with ImageOperations
     // This class is rather to load/save image and do basic preprocessing
     fun loadImage(path: String, size: Int): BufferedImage {
+        // TODO: add err handling
+        // if image is grayscale (1D - will Kotlin do 3D array?)
         val origImage = ImageIO.read(File(path))
         val rescaledImage = rescaleImage(origImage, size)
+        // without gamma adjustments - will be too pale
         return adjustGamma(rescaledImage, DEFAULT_GAMMA)
     }
 
@@ -35,6 +38,7 @@ class ImageProcessor {
     }
 
     private fun rescaleImage(image: BufferedImage, size: Int): BufferedImage {
+        // where size -> the desired longest dimension
         val scaleFactor: Double = size.toDouble() / maxOf(image.width, image.height)
         val newWidth = (image.width * scaleFactor).toInt()
         val newHeight = (image.height * scaleFactor).toInt()
@@ -56,6 +60,8 @@ class ImageProcessor {
         val gammaCorrectionLookup = ByteArray(256)
 
         for (i in gammaCorrectionLookup.indices) {
+            // for each possible byte -> get gamma-corrected value
+            // original_val ^ (1 / gamma)
             gammaCorrectionLookup[i] = (255.0 * (i / 255.0).pow(1.0 / gamma)).toInt().toByte()
         }
 
@@ -65,12 +71,17 @@ class ImageProcessor {
 
         for (y in 0 until height) {
             for (x in 0 until width) {
+                // iter over each pixel
                 val pixel = image.getRGB(x, y)
+                // extract ARGB vals from pixel int (32-bits integer)
                 val a = pixel shr 24 and 0xFF
+                // RGB values are to be replaced with corrected ones according to
+                // the gamma lookup table
                 val r = gammaCorrectionLookup[pixel shr 16 and 0xFF]
                 val g = gammaCorrectionLookup[pixel shr 8 and 0xFF]
                 val b = gammaCorrectionLookup[pixel and 0xFF]
 
+                // restore the pixel
                 val alpha = a shl 24
                 val red = (r.toInt() and 0xFF) shl 16
                 val green = (g.toInt() and 0xFF) shl 8
@@ -88,6 +99,7 @@ class ImageProcessor {
 class LameCompressor(private val pathToLame: String) {
 
     fun compressFile(inputFile: File, channelNum: Int): File {
+        // call lame on a input file containing raw byte array -> return path to mp3 file
         val outputFile = File("${inputFile.parent}/${channelNum}_${UUID.randomUUID()}.mp3")
         val command = StringBuilder()
             .append(pathToLame)
@@ -114,6 +126,7 @@ class LameCompressor(private val pathToLame: String) {
     }
 
     fun decompressFile(inputFile: File, channelNum: Int): File {
+        // decompress given mp3 file - get sort of uncompressed "wav"
         val outputFile = File("${inputFile.parent}/${channelNum}_dec_${UUID.randomUUID()}.bin")
         val command = "$pathToLame -S --decode --brief -x -t ${inputFile.absolutePath} ${outputFile.absolutePath}"
         println("Started $command")
@@ -149,6 +162,8 @@ class ImageOperations {
     fun arrayToImage(rgbArray: Array<Array<Array<Int>>>): BufferedImage {
         val width = rgbArray.size
         val height = rgbArray[0].size
+        // Alpha component is not really needed (but maybe interesting to try?)
+        // So TYPE_INT_RGB - 24 bytes
         val image = BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
 
         for (x in 0 until width) {
@@ -165,14 +180,15 @@ class ImageOperations {
     }
 
     fun array2DToImage(channel: Array<Array<Int>>): BufferedImage {
+
         val height = channel.size
         val width = channel[0].size
-        val image = BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
+        val image = BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
 
         for (i in 0 until height) {
             for (j in 0 until width) {
                 val gray = channel[i][j]
-                val rgb = gray shl 16 or (gray shl 8) or gray
+                val rgb = (gray shl 16) or (gray shl 8) or gray
                 image.setRGB(j, i, rgb)
             }
         }
@@ -181,6 +197,7 @@ class ImageOperations {
     }
 
     fun extractChannel(imageArr: Array<Array<Array<Int>>>, channel: Int): Array<Array<Int>> {
+        require(channel in 0..2) { "Channel must be between 0 and 2" }
         val width = imageArr.size
         val height = imageArr[0].size
 
@@ -192,6 +209,7 @@ class ImageOperations {
     }
 
     fun flattenChannel(channel: Array<Array<Int>>): Array<Int> {
+        // need this exact flattering direction to get horisontal streaks, not vertical
         val flattened = mutableListOf<Int>()
         val numColumns = channel[0].size
         for (j in 0 until numColumns) {
@@ -203,6 +221,8 @@ class ImageOperations {
     }
 
     fun shiftImage(matrix: Array<Array<Array<Int>>>, shift: Int): Array<Array<Array<Int>>> {
+        // shift all pixels to the right by "shift"
+        // needed to recover
         val height = matrix.size
         val width = matrix[0].size
         val depth = matrix[0][0].size
@@ -265,7 +285,7 @@ class GleitzschOperator(private val imageOperations: ImageOperations,
     fun apply(image: BufferedImage, tmpDir: String, rgbShift: Int): BufferedImage {
         val origRgbArray = imageOperations.transformTo3DArray(image)
         val gleitzschedArr = doGleitzsch(origRgbArray, tmpDir, rgbShift)
-        // Flatten the 3D array into 1D array for percentile calculations
+        // the output has dramatically low contrast -> need to enhance it for aestetical reasons
         val highContrastArr = imageOperations.enhanceContrast(gleitzschedArr)
         return imageOperations.arrayToImage(highContrastArr)
     }
@@ -298,6 +318,7 @@ class GleitzschOperator(private val imageOperations: ImageOperations,
         appliedShiftVal: Int
     ): Array<Array<Int>>
     {
+        // TODO: fix this func
         // If the appliedShiftVal is zero, return the channel unchanged
         if (appliedShiftVal == 0) {
             return channel
@@ -405,11 +426,11 @@ class GleitzschOperator(private val imageOperations: ImageOperations,
 
 
 class Application {
-    private val pathToLame = getPathToLame()
-    private val processor = ImageProcessor()
-    private val imageOperations = ImageOperations()
-    private val lameCompressor = LameCompressor(pathToLame)
-    private val gleitzschOperator = GleitzschOperator(imageOperations, lameCompressor)
+    private val pathToLame = getPathToLame()  // get path to lame in advance (if exists)
+    private val processor = ImageProcessor()  // TODO: rename and reorganize these classes - image IO
+    private val imageOperations = ImageOperations()  // operations on images and arrays
+    private val lameCompressor = LameCompressor(pathToLame)  // lame-related operations
+    private val gleitzschOperator = GleitzschOperator(imageOperations, lameCompressor)  // glitch itself
 
     fun run(args: Array<String>) {
         val parser = ArgParser("GleitzschOperator")
@@ -437,9 +458,11 @@ class Application {
         val exitValue = whichProcess.exitValue()
 
         return if (exitValue == 0) {
+            // ret path to lame
             whichProcess.inputStream.reader().use { it.readText().trim() }
         } else {
-            // write err message
+            // TODO: write err message
+            // smth like lame is required, pls install it
             exitProcess(1)
         }
     }
