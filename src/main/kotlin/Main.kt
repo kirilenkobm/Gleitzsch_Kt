@@ -6,6 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
+import java.awt.Color
 import java.awt.Image
 import java.awt.image.BufferedImage
 import java.io.File
@@ -105,8 +106,8 @@ class LameCompressor(private val pathToLame: String) {
 
         println("Started $command")
         val process = ProcessBuilder(*command.split(" ").toTypedArray())
-            .redirectOutput(ProcessBuilder.Redirect.INHERIT)
-            .redirectError(ProcessBuilder.Redirect.INHERIT)
+//            .redirectOutput(ProcessBuilder.Redirect.INHERIT)
+//            .redirectError(ProcessBuilder.Redirect.INHERIT)
             .start()
         process.waitFor()
         return outputFile
@@ -118,8 +119,8 @@ class LameCompressor(private val pathToLame: String) {
         println("Started $command")
 
         val process = ProcessBuilder(*command.split(" ").toTypedArray())
-            .redirectOutput(ProcessBuilder.Redirect.INHERIT)
-            .redirectError(ProcessBuilder.Redirect.INHERIT)
+//            .redirectOutput(ProcessBuilder.Redirect.INHERIT)
+//            .redirectError(ProcessBuilder.Redirect.INHERIT)
             .start()
         process.waitFor()
         return outputFile
@@ -157,6 +158,22 @@ class ImageOperations {
                 val b = rgbArray[x][y][2]
                 val color = (r shl 16) or (g shl 8) or b
                 image.setRGB(x, y, color)
+            }
+        }
+
+        return image
+    }
+
+    fun array2DToImage(channel: Array<Array<Int>>): BufferedImage {
+        val height = channel.size
+        val width = channel[0].size
+        val image = BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
+
+        for (i in 0 until height) {
+            for (j in 0 until width) {
+                val gray = channel[i][j]
+                val rgb = gray shl 16 or (gray shl 8) or gray
+                image.setRGB(j, i, rgb)
             }
         }
 
@@ -202,12 +219,12 @@ class ImageOperations {
         return newMatrix
     }
 
-    fun percentile(arr: IntArray, percentile: Double): Int {
+    private fun percentile(arr: IntArray, percentile: Double): Int {
         val index = (percentile / 100) * arr.size
         return arr.sorted()[index.toInt()]
     }
 
-    fun rescaleIntensity(image: Array<Array<Array<Int>>>, inRange: Pair<Int, Int>): Array<Array<Array<Int>>>
+    private fun rescaleIntensity(image: Array<Array<Array<Int>>>, inRange: Pair<Int, Int>): Array<Array<Array<Int>>>
     {
         val (low, high) = inRange
         val scaleFactor = 255.0 / (high - low)
@@ -219,10 +236,21 @@ class ImageOperations {
             }.toTypedArray()
         }.toTypedArray()
     }
+
+    fun enhanceContrast(
+        initArr: Array<Array<Array<Int>>>,
+        leftPercentile: Double = 5.0,
+        rightPercentile: Double = 95.0
+    ): Array<Array<Array<Int>>> {
+        val flattenedImage = initArr.flatten().flatMap { it.toList() }.toIntArray()
+        val low = percentile(flattenedImage, leftPercentile)
+        val high = percentile(flattenedImage, rightPercentile)
+        return rescaleIntensity(initArr, Pair(low, high))
+    }
 }
 
 
-data class ChannelData(
+data class DecompressedChannelData(
     val decompressedBytes: ByteArray,
     val byteArraySize: Int,
     val channelIndices: IntRange,
@@ -238,75 +266,14 @@ class GleitzschOperator(private val imageOperations: ImageOperations,
         val origRgbArray = imageOperations.transformTo3DArray(image)
         val gleitzschedArr = doGleitzsch(origRgbArray, tmpDir, rgbShift)
         // Flatten the 3D array into 1D array for percentile calculations
-        val flattenedGlitchedImage = gleitzschedArr.flatten().flatMap { it.toList() }.toIntArray()
-        val low = imageOperations.percentile(flattenedGlitchedImage, 5.0)
-        val high = imageOperations.percentile(flattenedGlitchedImage, 95.0)
-        val highContrastArr = imageOperations.rescaleIntensity(gleitzschedArr, Pair(low, high))
+        val highContrastArr = imageOperations.enhanceContrast(gleitzschedArr)
         return imageOperations.arrayToImage(highContrastArr)
     }
 
-    private fun doGleitzsch(
-        imageArr: Array<Array<Array<Int>>>,
-        tmpDir: String,
-        rgbShift: Int
-    ): Array<Array<Array<Int>>>
-    {
-        val shape = Triple(imageArr.size, imageArr[0].size, imageArr[0][0].size)
-        println("Original array shape: $shape")
-
-        val glitzschedArray = Array(imageArr.size) {
-            Array(imageArr[0].size) {
-                Array(imageArr[0][0].size) { 0 }
-            }
-        }
-
-        val decompressedData = arrayOfNulls<ChannelData>(3)
-
-        runBlocking {
-            val jobs = (0..2).map { channelNum ->
-                async(Dispatchers.IO) {
-                    val channel = imageOperations.extractChannel(imageArr, channelNum)
-                    val appliedShiftVal = rgbShift * channelNum
-                    println("$channelNum channel shape: ${channel.size}x${channel[0].size}")
-                    val flatChannel = imageOperations.flattenChannel(channel)
-                    val byteArray = flatChannel.map { it.toByte() }.toByteArray()
-                    val tempFile = Paths.get("$tmpDir/${channelNum}_${UUID.randomUUID()}.bin")
-                        .toFile()
-//                    val origSize = byteArray.size
-                    Files.write(tempFile.toPath(), byteArray)
-
-                    val compressedFile = lameCompressor.compressFile(tempFile, channelNum)
-                    val decompressedFile = lameCompressor.decompressFile(compressedFile, channelNum)
-
-                    val decompressedByteArray = Files.readAllBytes(decompressedFile.toPath())
-                    val byteArraySize = byteArray.size
-                    val channelIndices = channel.indices
-                    val channelZeroIndices = channel[0].indices
-//                    val newSize = decompressedByteArray.size
-//                    println(
-//                        "Orig: ${origSize}; " +
-//                                "lame-ed array size: ${newSize}; " +
-//                                "approx ${(newSize / origSize)} bigger"
-//                    )
-
-                    // Store the decompressed data for later use
-                    val result = ChannelData(
-                        decompressedBytes = decompressedByteArray,
-                        byteArraySize = byteArraySize,
-                        channelIndices = channelIndices,
-                        channelZeroIndices = channelZeroIndices
-                    )
-                    decompressedData[channelNum] = result
-
-                    Files.deleteIfExists(tempFile.toPath())
-                    Files.deleteIfExists(compressedFile.toPath())
-                    Files.deleteIfExists(decompressedFile.toPath())
-                }
-            }
-            jobs.awaitAll()
-        }
-
-        // Populate Gleitsched Array
+    private fun buildGleitzschedArray(
+        decompressedData: Array<DecompressedChannelData?>,
+        glitzschedArray: Array<Array<Array<Int>>>
+    ) {
         for (channelNum in 0..2) {
             val data = decompressedData[channelNum]!!
             val decompressedBytesArray = data.decompressedBytes
@@ -324,7 +291,112 @@ class GleitzschOperator(private val imageOperations: ImageOperations,
                 }
             }
         }
+    }
 
+    fun addRgbShiftToArray(
+        channel: Array<Array<Int>>,
+        appliedShiftVal: Int
+    ): Array<Array<Int>>
+    {
+        // If the appliedShiftVal is zero, return the channel unchanged
+        if (appliedShiftVal == 0) {
+            return channel
+        }
+        println("Channel shape: ${channel.size}x${channel[0].size} ")
+
+        // Otherwise, create a BufferedImage from the channel
+        val height = channel.size
+        val width = channel[0].size
+        val image = imageOperations.array2DToImage(channel)
+
+        // Rescale the image, adding + appliedShiftVal to each side
+        val newWidth = width + 2 * appliedShiftVal
+        val newHeight = height + 2 * appliedShiftVal
+        val rescaledImage = BufferedImage(newWidth, newHeight, BufferedImage.TYPE_INT_ARGB)
+        val g2d = rescaledImage.createGraphics()
+        g2d.drawImage(image, appliedShiftVal, appliedShiftVal, width, height, null)
+        g2d.dispose()
+
+        // Trim the central part of the image, removing the borders
+        val croppedImage = rescaledImage.getSubimage(appliedShiftVal, appliedShiftVal, width, height)
+
+        // Convert the BufferedImage back into a 2D array
+        // Convert the BufferedImage back into a 2D array
+        val result = Array(height) { Array(width) { 0 } } // swap width and height
+        for (i in 0 until height) {                       // iterate over height first
+            for (j in 0 until width) {                    // then over width
+                val color = Color(croppedImage.getRGB(j, i)) // swap i and j
+                result[i][j] = color.red
+            }
+        }
+        println("Result shape: ${result.size}x${result[0].size} ")
+
+
+        return result
+    }
+
+
+    private fun doGleitzsch(
+        imageArr: Array<Array<Array<Int>>>,
+        tmpDir: String,
+        rgbShift: Int
+    ): Array<Array<Array<Int>>>
+    {
+        val shape = Triple(imageArr.size, imageArr[0].size, imageArr[0][0].size)
+        println("Original array shape: $shape")
+        val decompressedData = arrayOfNulls<DecompressedChannelData>(3)
+
+        val glitzschedArray = Array(imageArr.size) {
+            Array(imageArr[0].size) {
+                Array(imageArr[0][0].size) { 0 }
+            }
+        }
+
+        runBlocking {
+            val jobs = (0..2).map { channelNum ->
+                async(Dispatchers.IO) {
+                    val channel = imageOperations.extractChannel(imageArr, channelNum)
+                    val appliedShiftVal = rgbShift * channelNum
+                   //  val channelRgbShifted = addRgbShiftToArray(channel, appliedShiftVal)
+
+
+                    // println("$channelNum channel shape: ${channelRgbShifted.size}x${channelRgbShifted[0].size}")
+                    val flatChannel = imageOperations.flattenChannel(channel)
+                    val byteArray = flatChannel.map { it.toByte() }.toByteArray()
+                    val tempFile = Paths.get("$tmpDir/${channelNum}_${UUID.randomUUID()}.bin")
+                        .toFile()
+                    Files.write(tempFile.toPath(), byteArray)
+
+                    val compressedFile = lameCompressor.compressFile(tempFile, channelNum)
+                    val decompressedFile = lameCompressor.decompressFile(compressedFile, channelNum)
+
+                    val decompressedByteArray = Files.readAllBytes(decompressedFile.toPath())
+                    val byteArraySize = byteArray.size
+                    val channelIndices = channel.indices
+                    val channelZeroIndices = channel[0].indices
+//                    val origSize = byteArray.size
+//                    val newSize = decompressedByteArray.size
+//                    println("Orig: ${origSize}; "lame-ed : ${newSize}; "approx ${(newSize / origSize)} bigger")
+
+                    // Store the decompressed data for later use
+                    val result = DecompressedChannelData(
+                        decompressedBytes = decompressedByteArray,
+                        byteArraySize = byteArraySize,
+                        channelIndices = channelIndices,
+                        channelZeroIndices = channelZeroIndices
+                    )
+                    decompressedData[channelNum] = result
+
+                    Files.deleteIfExists(tempFile.toPath())
+                    Files.deleteIfExists(compressedFile.toPath())
+                    Files.deleteIfExists(decompressedFile.toPath())
+                }
+            }
+            jobs.awaitAll()
+        }
+
+        // Populate Gleitzched Array
+        buildGleitzschedArray(decompressedData, glitzschedArray)
 
         val shift = shape.first - (shape.first / DEFAULT_SHIFT_DENOMINATOR).roundToInt()
         return imageOperations.shiftImage(glitzschedArray, shift)
