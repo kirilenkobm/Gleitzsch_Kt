@@ -380,7 +380,6 @@ class GleitzschOperator(private val imageOperations: ImageOperations,
                     val appliedShiftVal = rgbShift * channelNum
                    //  val channelRgbShifted = addRgbShiftToArray(channel, appliedShiftVal)
 
-
                     // println("$channelNum channel shape: ${channelRgbShifted.size}x${channelRgbShifted[0].size}")
                     val flatChannel = imageOperations.flattenChannel(channel)
                     val byteArray = flatChannel.map { it.toByte() }.toByteArray()
