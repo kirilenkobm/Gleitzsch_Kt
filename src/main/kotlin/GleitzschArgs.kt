@@ -6,8 +6,10 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.util.*
 
-
+const val DEFAULT_IMAGE_SIZE = 1024
 const val DEFAULT_GAMMA = 10.0
+const val DEFAULT_RGB_SHIFT = 8
+
 
 data class GleitzschArgs(
     val inputImagePath: String,
@@ -35,7 +37,7 @@ class GleitzschArgsParser {
         val imageSize by parser.option(
                 ArgType.Int,
                 description = "Size of the processed image (long size)"
-        ).default(1024)
+        ).default(DEFAULT_IMAGE_SIZE)
 
         val tempDirArg by parser.option(
                 ArgType.String,
@@ -46,7 +48,7 @@ class GleitzschArgsParser {
         )
         val tempDir = tempDirArg ?: createTempDir().toFile().absolutePath
 
-        val rgbShift by parser.option(ArgType.Int, description = "RGB shift to be applied").default(8)
+        val rgbShift by parser.option(ArgType.Int, description = "RGB shift to be applied").default(DEFAULT_RGB_SHIFT)
         val gammaParam by parser.option(
                 ArgType.Double,
                 description = "Preprocessing gamma adjustment"
