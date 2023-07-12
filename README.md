@@ -23,6 +23,6 @@ To run Gleitzsch, ensure that you have the LAME MP3 encoder installed on your sy
 
 ![alt text](Examples/1.jpg "Example 1")
 
-![alt text](Examples/1.jpg "Example 2")
+![alt text](Examples/2.jpg "Example 2")
 
-![alt text](Examples/1.jpg "Example 3")
+![alt text](Examples/3.jpg "Example 3")
