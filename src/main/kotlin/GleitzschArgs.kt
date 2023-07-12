@@ -8,7 +8,7 @@ import java.util.*
 
 const val DEFAULT_IMAGE_SIZE = 1024
 const val DEFAULT_GAMMA = 10.0
-const val DEFAULT_RGB_SHIFT = 4
+const val DEFAULT_RGB_SHIFT = 2
 
 
 data class GleitzschArgs(
@@ -36,7 +36,7 @@ class GleitzschArgsParser {
         val outputImagePath by parser.argument(ArgType.String, description = "Path to the output image")
         val imageSize by parser.option(
                 ArgType.Int,
-                description = "Size of the processed image (long size)"
+                description = "Size of the processed image (long dimension, default $DEFAULT_IMAGE_SIZE)"
         ).default(DEFAULT_IMAGE_SIZE)
 
         val tempDirArg by parser.option(
@@ -48,11 +48,16 @@ class GleitzschArgsParser {
         )
         val tempDir = tempDirArg ?: createTempDir().toFile().absolutePath
 
-        val rgbShift by parser.option(ArgType.Int, description = "RGB shift to be applied").default(DEFAULT_RGB_SHIFT)
+        val rgbShift by parser.option(
+                ArgType.Int,
+                description = "RGB shift to be applied (default $DEFAULT_RGB_SHIFT)"
+        ).default(DEFAULT_RGB_SHIFT)
         val gammaParam by parser.option(
                 ArgType.Double,
-                description = "Preprocessing gamma adjustment"
+                description = "Preprocessing gamma adjustment (default $DEFAULT_GAMMA)"
         ).default(DEFAULT_GAMMA)
+
+
         parser.parse(args)
 
         return GleitzschArgs(

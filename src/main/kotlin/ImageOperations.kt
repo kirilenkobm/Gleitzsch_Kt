@@ -67,8 +67,8 @@ class ImageOperations {
 
     fun enhanceContrast(
             initArr: Array<Array<Array<Int>>>,
-            leftPercentile: Double = 5.0,
-            rightPercentile: Double = 95.0
+            leftPercentile: Double = 4.0,
+            rightPercentile: Double = 96.0
     ): Array<Array<Array<Int>>> {
         val flattenedImage = initArr.flatten().flatMap { it.toList() }.toIntArray()
         val low = percentile(flattenedImage, leftPercentile)
