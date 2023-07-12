@@ -1,4 +1,8 @@
 // Holds decompressed channel data
 
-//class DecompressedChannelData {
-//}
+data class DecompressedChannelData(
+        val decompressedBytes: ByteArray,
+        val byteArraySize: Int,
+        val channelIndices: IntRange,
+        val channelZeroIndices: IntRange
+)
