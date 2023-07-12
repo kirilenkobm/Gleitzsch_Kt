@@ -13,8 +13,7 @@ class GleitzschApp {
         val gleitzschArgs = argsParser.parse(args)
 
         val image = imageIO.loadImage(
-                gleitzschArgs.inputImagePath,
-                gleitzschArgs.imageSize
+                gleitzschArgs.inputImagePath
         )
         val preprocessedImage = imagePreprocessor.preprocessImage(
                 image,

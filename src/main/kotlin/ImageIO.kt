@@ -5,7 +5,7 @@ import javax.imageio.ImageIO
 // Handles all image I/O operations.
 
 class ImageIO {
-    fun loadImage(path: String, size: Int): BufferedImage {
+    fun loadImage(path: String): BufferedImage {
         // TODO: add err handling
         // if image is grayscale (1D - will Kotlin do 3D array?)
         return ImageIO.read(File(path))
