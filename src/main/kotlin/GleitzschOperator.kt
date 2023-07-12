@@ -128,10 +128,6 @@ class GleitzschOperator(private val imageOperations: ImageOperations,
                     val byteArraySize = byteArray.size
                     val channelIndices = channel.indices
                     val channelZeroIndices = channel[0].indices
-//                    val origSize = byteArray.size
-//                    val newSize = decompressedByteArray.size
-//                    println("Orig: ${origSize}; "lame-ed : ${newSize}; "approx ${(newSize / origSize)} bigger")
-
                     // Store the decompressed data for later use
                     val result = DecompressedChannelData(
                             decompressedBytes = decompressedByteArray,

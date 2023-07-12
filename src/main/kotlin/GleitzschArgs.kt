@@ -2,6 +2,9 @@
 import kotlinx.cli.ArgParser
 import kotlinx.cli.ArgType
 import kotlinx.cli.default
+import java.nio.file.Files
+import java.nio.file.Path
+import java.util.*
 
 
 const val DEFAULT_GAMMA = 10.0
@@ -15,6 +18,14 @@ data class GleitzschArgs(
     val gamma: Double
 )
 
+fun createTempDir(): Path {
+    val prefix = "tmp_gleitzsch_${UUID.randomUUID()}_"
+    val tempDir = Files.createTempDirectory(prefix)
+    tempDir.toFile().deleteOnExit()
+    return tempDir
+}
+
+
 class GleitzschArgsParser {
     fun parse(args: Array<String>): GleitzschArgs {
         val parser = ArgParser("Gleitzsch")
@@ -25,10 +36,15 @@ class GleitzschArgsParser {
                 ArgType.Int,
                 description = "Size of the processed image (long size)"
         ).default(1024)
-        val tempDir by parser.option(
+
+        val tempDirArg by parser.option(
                 ArgType.String,
-                description = "Path to the temp directory"
-        ).default("tempDir")
+                description = """
+                Define temp directory. If provided by you -
+                the intermediate files will not be deleted
+                """
+        )
+        val tempDir = tempDirArg ?: createTempDir().toFile().absolutePath
 
         val rgbShift by parser.option(ArgType.Int, description = "RGB shift to be applied").default(8)
         val gammaParam by parser.option(
