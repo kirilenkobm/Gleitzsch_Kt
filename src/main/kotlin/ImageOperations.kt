@@ -144,4 +144,38 @@ class ImageOperations {
         }
         return array
     }
+
+
+    fun addRgbShiftToArray(
+            channel: Array<Array<Int>>,
+            appliedShiftVal: Int
+    ): Array<Array<Int>>
+    {
+        // If the appliedShiftVal is zero, return the channel unchanged
+        if (appliedShiftVal == 0) {
+            return channel
+        }
+        println("Channel shape: ${channel.size}x${channel[0].size} ")
+
+        // Otherwise, create a BufferedImage from the channel
+        val height = channel.size
+        val width = channel[0].size
+        val image = array2DToImage(channel)
+
+        // Rescale the image, adding + appliedShiftVal to each side
+        val newWidth = width + 2 * appliedShiftVal
+        val newHeight = height + 2 * appliedShiftVal
+        val rescaledImage = BufferedImage(newWidth, newHeight, BufferedImage.TYPE_INT_ARGB)
+        val g2d = rescaledImage.createGraphics()
+        g2d.drawImage(image, appliedShiftVal, appliedShiftVal, newWidth, newHeight, null)
+        g2d.dispose()
+
+        // Trim the central part of the image, removing the borders
+        val croppedImage = rescaledImage.getSubimage(appliedShiftVal, appliedShiftVal, width, height)
+
+        // Convert the BufferedImage back into a 2D array
+        val result = imageTo2DArray(croppedImage)
+        println("Result shape: ${result.size}x${result[0].size} ")
+        return result
+    }
 }

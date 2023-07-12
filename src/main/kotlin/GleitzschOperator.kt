@@ -26,7 +26,7 @@ class GleitzschOperator(private val imageOperations: ImageOperations,
 
     private fun buildGleitzschedArray(
             decompressedData: Array<DecompressedChannelData?>,
-            glitzschedArray: Array<Array<Array<Int>>>
+            gleitzschedArray: Array<Array<Array<Int>>>
     ) {
         for (channelNum in 0..2) {
             val data = decompressedData[channelNum]!!
@@ -40,44 +40,11 @@ class GleitzschOperator(private val imageOperations: ImageOperations,
             var index = 0
             for (j in data.channelZeroIndices) {
                 for (i in data.channelIndices) {
-                    glitzschedArray[i][j][channelNum] = decompressedBytesArray[index].toInt() and 0xFF
+                    gleitzschedArray[i][j][channelNum] = decompressedBytesArray[index].toInt() and 0xFF
                     index += 1
                 }
             }
         }
-    }
-
-    fun addRgbShiftToArray(
-            channel: Array<Array<Int>>,
-            appliedShiftVal: Int
-    ): Array<Array<Int>>
-    {
-        // If the appliedShiftVal is zero, return the channel unchanged
-        if (appliedShiftVal == 0) {
-            return channel
-        }
-        println("Channel shape: ${channel.size}x${channel[0].size} ")
-
-        // Otherwise, create a BufferedImage from the channel
-        val height = channel.size
-        val width = channel[0].size
-        val image = imageOperations.array2DToImage(channel)
-
-        // Rescale the image, adding + appliedShiftVal to each side
-        val newWidth = width + 2 * appliedShiftVal
-        val newHeight = height + 2 * appliedShiftVal
-        val rescaledImage = BufferedImage(newWidth, newHeight, BufferedImage.TYPE_INT_ARGB)
-        val g2d = rescaledImage.createGraphics()
-        g2d.drawImage(image, appliedShiftVal, appliedShiftVal, newWidth, newHeight, null)
-        g2d.dispose()
-
-        // Trim the central part of the image, removing the borders
-        val croppedImage = rescaledImage.getSubimage(appliedShiftVal, appliedShiftVal, width, height)
-
-        // Convert the BufferedImage back into a 2D array
-        val result = imageOperations.imageTo2DArray(croppedImage)
-        println("Result shape: ${result.size}x${result[0].size} ")
-        return result
     }
 
 
@@ -110,12 +77,6 @@ class GleitzschOperator(private val imageOperations: ImageOperations,
         println("Original array shape: $shape")
         val decompressedData = arrayOfNulls<DecompressedChannelData>(3)
 
-        val glitzschedArray = Array(imageArr.size) {
-            Array(imageArr[0].size) {
-                Array(imageArr[0][0].size) { 0 }
-            }
-        }
-
         runBlocking {
             val jobs = (0..2).map { channelNum ->
                 async(Dispatchers.IO) {
@@ -128,7 +89,7 @@ class GleitzschOperator(private val imageOperations: ImageOperations,
                     val channel = imageOperations.extractChannel(imageArr, channelNum)
                     val appliedShiftVal = rgbShift * channelNum
                     print("Applying shift: $appliedShiftVal")
-                    val channelRgbShifted = addRgbShiftToArray(channel, appliedShiftVal)
+                    val channelRgbShifted = imageOperations.addRgbShiftToArray(channel, appliedShiftVal)
 
                     // flat channel, convert to bytes and save to a bin (like "wav") file
                     // val flatChannel = imageOperations.flattenChannel(channel)
@@ -153,9 +114,14 @@ class GleitzschOperator(private val imageOperations: ImageOperations,
         }
 
         // Populate Gleitzched Array
-        buildGleitzschedArray(decompressedData, glitzschedArray)
+        val gleitzschedArray = Array(imageArr.size) {
+            Array(imageArr[0].size) {
+                Array(imageArr[0][0].size) { 0 }
+            }
+        }
+        buildGleitzschedArray(decompressedData, gleitzschedArray)
 
         val shift = shape.first - (shape.first / DEFAULT_SHIFT_DENOMINATOR).roundToInt()
-        return imageOperations.shiftImage(glitzschedArray, shift)
+        return imageOperations.shiftImage(gleitzschedArray, shift)
     }
 }
