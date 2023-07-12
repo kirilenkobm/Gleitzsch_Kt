@@ -8,7 +8,7 @@ import java.util.*
 
 const val DEFAULT_IMAGE_SIZE = 1024
 const val DEFAULT_GAMMA = 10.0
-const val DEFAULT_RGB_SHIFT = 8
+const val DEFAULT_RGB_SHIFT = 4
 
 
 data class GleitzschArgs(

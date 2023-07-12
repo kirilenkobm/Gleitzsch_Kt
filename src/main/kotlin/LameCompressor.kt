@@ -1,15 +1,13 @@
 // Handles the compression and decompression of files using lame.
 import java.io.File
-import java.util.*
 import kotlin.system.exitProcess
 
 
 class LameCompressor() {
     private val pathToLame: String = getPathToLame()
 
-    fun compressFile(inputFile: File, channelNum: Int): File {
+    fun compressFile(inputFile: File, outputFile: File, channelNum: Int) {
         // call lame on an input file containing raw byte array -> return path to mp3 file
-        val outputFile = File("${inputFile.parent}/${channelNum}_${UUID.randomUUID()}.mp3")
         val command = StringBuilder()
                 .append(pathToLame)
                 .append(" -r")
@@ -31,12 +29,10 @@ class LameCompressor() {
 //            .redirectError(ProcessBuilder.Redirect.INHERIT)
                 .start()
         process.waitFor()
-        return outputFile
     }
 
-    fun decompressFile(inputFile: File, channelNum: Int): File {
+    fun decompressFile(inputFile: File, outputFile: File, channelNum: Int){
         // decompress given mp3 file - get sort of uncompressed "wav"
-        val outputFile = File("${inputFile.parent}/${channelNum}_dec_${UUID.randomUUID()}.bin")
         val command = "$pathToLame -S --decode --brief -x -t ${inputFile.absolutePath} ${outputFile.absolutePath}"
         println("Started $command")
 
@@ -45,7 +41,6 @@ class LameCompressor() {
 //            .redirectError(ProcessBuilder.Redirect.INHERIT)
                 .start()
         process.waitFor()
-        return outputFile
     }
 
     private fun getPathToLame(): String {

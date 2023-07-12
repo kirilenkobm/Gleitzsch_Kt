@@ -1,11 +1,11 @@
+
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
-import java.awt.Color
 import java.awt.image.BufferedImage
+import java.io.File
 import java.nio.file.Files
-import java.nio.file.Paths
 import java.util.*
 import kotlin.math.roundToInt
 
@@ -17,11 +17,11 @@ class GleitzschOperator(private val imageOperations: ImageOperations,
 {
     // Your Gleitzsch operation methods go here
     fun apply(image: BufferedImage, tmpDir: String, rgbShift: Int): BufferedImage {
-        val origRgbArray = imageOperations.transformTo3DArray(image)
+        val origRgbArray = imageOperations.imageTo3DArray(image)
         val gleitzschedArr = doGleitzsch(origRgbArray, tmpDir, rgbShift)
         // the output has dramatically low contrast -> need to enhance it for aesthetic reasons
         val highContrastArr = imageOperations.enhanceContrast(gleitzschedArr)
-        return imageOperations.arrayToImage(highContrastArr)
+        return imageOperations.array3DToImage(highContrastArr)
     }
 
     private fun buildGleitzschedArray(
@@ -52,7 +52,6 @@ class GleitzschOperator(private val imageOperations: ImageOperations,
             appliedShiftVal: Int
     ): Array<Array<Int>>
     {
-        // TODO: fix this func
         // If the appliedShiftVal is zero, return the channel unchanged
         if (appliedShiftVal == 0) {
             return channel
@@ -69,27 +68,37 @@ class GleitzschOperator(private val imageOperations: ImageOperations,
         val newHeight = height + 2 * appliedShiftVal
         val rescaledImage = BufferedImage(newWidth, newHeight, BufferedImage.TYPE_INT_ARGB)
         val g2d = rescaledImage.createGraphics()
-        g2d.drawImage(image, appliedShiftVal, appliedShiftVal, width, height, null)
+        g2d.drawImage(image, appliedShiftVal, appliedShiftVal, newWidth, newHeight, null)
         g2d.dispose()
 
         // Trim the central part of the image, removing the borders
         val croppedImage = rescaledImage.getSubimage(appliedShiftVal, appliedShiftVal, width, height)
 
         // Convert the BufferedImage back into a 2D array
-        // Convert the BufferedImage back into a 2D array
-        val result = Array(height) { Array(width) { 0 } } // swap width and height
-        for (i in 0 until height) {                       // iterate over height first
-            for (j in 0 until width) {                    // then over width
-                val color = Color(croppedImage.getRGB(j, i)) // swap i and j
-                result[i][j] = color.red
-            }
-        }
+        val result = imageOperations.imageTo2DArray(croppedImage)
         println("Result shape: ${result.size}x${result[0].size} ")
-
-
         return result
     }
 
+
+    // Create decompressedData structure from decompressed file
+    private fun createDecompressedData(
+        decompressedFile: File,
+        byteArray: ByteArray,
+        channel: Array<Array<Int>>
+    ): DecompressedChannelData {
+        val decompressedByteArray = Files.readAllBytes(decompressedFile.toPath())
+        val byteArraySize = byteArray.size
+        val channelIndices = channel.indices
+        val channelZeroIndices = channel[0].indices
+
+        return DecompressedChannelData(
+            decompressedBytes = decompressedByteArray,
+            byteArraySize = byteArraySize,
+            channelIndices = channelIndices,
+            channelZeroIndices = channelZeroIndices
+        )
+    }
 
     private fun doGleitzsch(
             imageArr: Array<Array<Array<Int>>>,
@@ -110,34 +119,32 @@ class GleitzschOperator(private val imageOperations: ImageOperations,
         runBlocking {
             val jobs = (0..2).map { channelNum ->
                 async(Dispatchers.IO) {
+                    // define paths to all intermediate files
+                    val initialBytesFile = File("$tmpDir/${channelNum}_${UUID.randomUUID()}.bin")
+                    val compressedFile = File("$tmpDir/${channelNum}_${UUID.randomUUID()}.mp3")
+                    val decompressedFile = File("$tmpDir/${channelNum}_dec_${UUID.randomUUID()}.bin")
+
+                    // extract and postprocess the channel
                     val channel = imageOperations.extractChannel(imageArr, channelNum)
                     val appliedShiftVal = rgbShift * channelNum
-                    //  val channelRgbShifted = addRgbShiftToArray(channel, appliedShiftVal)
+                    print("Applying shift: $appliedShiftVal")
+                    val channelRgbShifted = addRgbShiftToArray(channel, appliedShiftVal)
 
-                    // println("$channelNum channel shape: ${channelRgbShifted.size}x${channelRgbShifted[0].size}")
-                    val flatChannel = imageOperations.flattenChannel(channel)
+                    // flat channel, convert to bytes and save to a bin (like "wav") file
+                    // val flatChannel = imageOperations.flattenChannel(channel)
+                    val flatChannel = imageOperations.flattenChannel(channelRgbShifted)
                     val byteArray = flatChannel.map { it.toByte() }.toByteArray()
-                    val tempFile = Paths.get("$tmpDir/${channelNum}_${UUID.randomUUID()}.bin")
-                            .toFile()
-                    Files.write(tempFile.toPath(), byteArray)
+                    Files.write(initialBytesFile.toPath(), byteArray)
 
-                    val compressedFile = lameCompressor.compressFile(tempFile, channelNum)
-                    val decompressedFile = lameCompressor.decompressFile(compressedFile, channelNum)
+                    // compress to mp3 and decompress back
+                    lameCompressor.compressFile(initialBytesFile, compressedFile, channelNum)
+                    lameCompressor.decompressFile(compressedFile, decompressedFile, channelNum)
 
-                    val decompressedByteArray = Files.readAllBytes(decompressedFile.toPath())
-                    val byteArraySize = byteArray.size
-                    val channelIndices = channel.indices
-                    val channelZeroIndices = channel[0].indices
                     // Store the decompressed data for later use
-                    val result = DecompressedChannelData(
-                            decompressedBytes = decompressedByteArray,
-                            byteArraySize = byteArraySize,
-                            channelIndices = channelIndices,
-                            channelZeroIndices = channelZeroIndices
-                    )
+                    val result = createDecompressedData(decompressedFile, byteArray, channel)
                     decompressedData[channelNum] = result
 
-                    Files.deleteIfExists(tempFile.toPath())
+                    Files.deleteIfExists(initialBytesFile.toPath())
                     Files.deleteIfExists(compressedFile.toPath())
                     Files.deleteIfExists(decompressedFile.toPath())
                 }

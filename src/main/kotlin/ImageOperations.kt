@@ -76,7 +76,7 @@ class ImageOperations {
         return rescaleIntensity(initArr, Pair(low, high))
     }
 
-    fun transformTo3DArray(image: BufferedImage): Array<Array<Array<Int>>> {
+    fun imageTo3DArray(image: BufferedImage): Array<Array<Array<Int>>> {
         val width = image.width
         val height = image.height
         val rgbArray: Array<Array<Array<Int>>> = Array(width) { Array(height) { Array(3) { 0 } } }
@@ -93,7 +93,7 @@ class ImageOperations {
         return rgbArray
     }
 
-    fun arrayToImage(rgbArray: Array<Array<Array<Int>>>): BufferedImage {
+    fun array3DToImage(rgbArray: Array<Array<Array<Int>>>): BufferedImage {
         val width = rgbArray.size
         val height = rgbArray[0].size
         // Alpha component is not really needed (but maybe interesting to try?)
@@ -128,5 +128,20 @@ class ImageOperations {
         }
 
         return image
+    }
+
+    fun imageTo2DArray(image: BufferedImage): Array<Array<Int>> {
+        val width = image.width
+        val height = image.height
+        val array = Array(height) { Array(width) { 0 } }
+
+        for (i in 0 until height) {
+            for (j in 0 until width) {
+                val rgb = image.getRGB(j, i)
+                val r = (rgb shr 16) and 0xFF
+                array[i][j] = r
+            }
+        }
+        return array
     }
 }
