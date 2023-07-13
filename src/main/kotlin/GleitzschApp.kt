@@ -17,13 +17,11 @@ class GleitzschApp {
         )
         val preprocessedImage = imagePreprocessor.preprocessImage(
                 image,
-                gleitzschArgs.imageSize,
-                gleitzschArgs.gamma
+                gleitzschArgs
         )
         val resultImage = gleitzschOperator.apply(
                 preprocessedImage,
-                gleitzschArgs.tempDir,
-                gleitzschArgs.rgbShift
+                gleitzschArgs
         )
         imageIO.saveImage(resultImage, gleitzschArgs.outputImagePath) // Use imageIO to save the result
     }

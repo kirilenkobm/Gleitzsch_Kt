@@ -9,6 +9,8 @@ import java.util.*
 const val DEFAULT_IMAGE_SIZE = 1024
 const val DEFAULT_GAMMA = 10.0
 const val DEFAULT_RGB_SHIFT = 2
+const val DEFAULT_CONTRAST_LEFT_PERCENTILE = 4.0
+const val DEFAULT_CONTRAST_RIGHT_PERCENTILE = 96.0
 
 
 data class GleitzschArgs(
@@ -17,8 +19,22 @@ data class GleitzschArgs(
     val imageSize: Int,
     val tempDir: String,
     val rgbShift: Int,
-    val gamma: Double
-)
+    val gamma: Double,
+    val leftPercentile: Double,
+    val rightPercentile: Double
+) {
+    fun printAttributes() {
+        println("Gleitzsch run options:")
+        println("inputImagePath: $inputImagePath")
+        println("outputImagePath: $outputImagePath")
+        println("imageSize: $imageSize")
+        println("tempDir: $tempDir")
+        println("rgbShift: $rgbShift")
+        println("gamma: $gamma")
+        println("leftPercentile: $leftPercentile")
+        println("rightPercentile: $rightPercentile")
+    }
+}
 
 fun createTempDir(): Path {
     val prefix = "tmp_gleitzsch_${UUID.randomUUID()}_"
@@ -35,38 +51,56 @@ class GleitzschArgsParser {
         val inputImagePath by parser.argument(ArgType.String, description = "Path to the input image")
         val outputImagePath by parser.argument(ArgType.String, description = "Path to the output image")
         val imageSize by parser.option(
-                ArgType.Int,
-                description = "Size of the processed image (long dimension, default $DEFAULT_IMAGE_SIZE)"
+            ArgType.Int,
+            description = "Size of the processed image (long dimension, default $DEFAULT_IMAGE_SIZE)"
         ).default(DEFAULT_IMAGE_SIZE)
 
         val tempDirArg by parser.option(
-                ArgType.String,
-                description = """
-                Define temp directory. If provided by you -
-                the intermediate files will not be deleted
-                """
+            ArgType.String,
+            description = """
+            Define temp directory. If provided by you -
+            the intermediate files will not be deleted
+            """
         )
         val tempDir = tempDirArg ?: createTempDir().toFile().absolutePath
 
         val rgbShift by parser.option(
-                ArgType.Int,
-                description = "RGB shift to be applied (default $DEFAULT_RGB_SHIFT)"
+            ArgType.Int,
+            description = "RGB shift to be applied (default $DEFAULT_RGB_SHIFT)"
         ).default(DEFAULT_RGB_SHIFT)
+
         val gammaParam by parser.option(
-                ArgType.Double,
-                description = "Preprocessing gamma adjustment (default $DEFAULT_GAMMA)"
+            ArgType.Double,
+            description = "Preprocessing gamma adjustment (default $DEFAULT_GAMMA)"
         ).default(DEFAULT_GAMMA)
 
+        val leftPercentile by parser.option(
+            ArgType.Double,
+            description = """
+                Left intensity percentile for contrast enhancement (default $DEFAULT_CONTRAST_LEFT_PERCENTILE)
+                """
+        ).default(DEFAULT_CONTRAST_LEFT_PERCENTILE)
+
+        val rightPercentile by parser.option(
+            ArgType.Double,
+            description = """
+                Right intensity percentile for contrast enhancement (default $DEFAULT_CONTRAST_RIGHT_PERCENTILE)
+                """
+        ).default(DEFAULT_CONTRAST_RIGHT_PERCENTILE)
 
         parser.parse(args)
 
-        return GleitzschArgs(
-                inputImagePath,
-                outputImagePath,
-                imageSize,
-                tempDir,
-                rgbShift,
-                gammaParam,
+        val args = GleitzschArgs(
+            inputImagePath,
+            outputImagePath,
+            imageSize,
+            tempDir,
+            rgbShift,
+            gammaParam,
+            leftPercentile,
+            rightPercentile
         )
+        args.printAttributes()
+        return args
     }
 }

@@ -5,7 +5,6 @@ import kotlin.math.pow
 
 
 // Conducts preprocessing tasks such as adjusting gamma, rescaling images, and other preprocessing operations.
-
 class ImagePreprocessor {
     private fun rescaleImage(image: BufferedImage, size: Int): BufferedImage {
         // where size -> the desired longest dimension
@@ -64,8 +63,8 @@ class ImagePreprocessor {
         return newImage
     }
 
-    fun preprocessImage(image: BufferedImage, size: Int, gamma: Double): BufferedImage {
-        val rescaledImage = rescaleImage(image, size)
-        return adjustGamma(rescaledImage, gamma)
+    fun preprocessImage(image: BufferedImage, args: GleitzschArgs): BufferedImage {
+        val rescaledImage = rescaleImage(image, args.imageSize)
+        return adjustGamma(rescaledImage, args.gamma)
     }
 }

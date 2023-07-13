@@ -1,4 +1,4 @@
-
+// Applies the Gleitzsch operator to images.
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -10,17 +10,20 @@ import java.util.*
 import kotlin.math.roundToInt
 
 const val DEFAULT_SHIFT_DENOMINATOR = 8.0
-// Applies the Gleitzsch operator to images.
 
 class GleitzschOperator(private val imageOperations: ImageOperations,
                         private val lameCompressor: LameCompressor)
 {
     // Your Gleitzsch operation methods go here
-    fun apply(image: BufferedImage, tmpDir: String, rgbShift: Int): BufferedImage {
+    fun apply(image: BufferedImage, args: GleitzschArgs): BufferedImage {
         val origRgbArray = imageOperations.imageTo3DArray(image)
-        val gleitzschedArr = doGleitzsch(origRgbArray, tmpDir, rgbShift)
+        val gleitzschedArr = doGleitzsch(origRgbArray, args.tempDir, args.rgbShift)
         // the output has dramatically low contrast -> need to enhance it for aesthetic reasons
-        val highContrastArr = imageOperations.enhanceContrast(gleitzschedArr)
+        val highContrastArr = imageOperations.enhanceContrast(
+            gleitzschedArr,
+            leftPercentile = args.leftPercentile,
+            rightPercentile = args.rightPercentile
+        )
         return imageOperations.array3DToImage(highContrastArr)
     }
 
@@ -46,7 +49,6 @@ class GleitzschOperator(private val imageOperations: ImageOperations,
             }
         }
     }
-
 
     // Create decompressedData structure from decompressed file
     private fun createDecompressedData(
@@ -88,7 +90,7 @@ class GleitzschOperator(private val imageOperations: ImageOperations,
                     // extract and postprocess the channel
                     val channel = imageOperations.extractChannel(imageArr, channelNum)
                     val appliedShiftVal = rgbShift * channelNum
-                    print("Applying shift: $appliedShiftVal")
+                    println("Applying shift: $appliedShiftVal to channel $channelNum")
                     val channelRgbShifted = imageOperations.addRgbShiftToArray(channel, appliedShiftVal)
 
                     // flat channel, convert to bytes and save to a bin (like "wav") file
