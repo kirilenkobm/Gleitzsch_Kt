@@ -113,7 +113,7 @@ class ImageOperations {
         return image
     }
 
-    fun array2DToImage(channel: Array<Array<Int>>): BufferedImage {
+    private fun array2DToImage(channel: Array<Array<Int>>): BufferedImage {
 
         val height = channel.size
         val width = channel[0].size
@@ -130,7 +130,7 @@ class ImageOperations {
         return image
     }
 
-    fun imageTo2DArray(image: BufferedImage): Array<Array<Int>> {
+    private fun imageTo2DArray(image: BufferedImage): Array<Array<Int>> {
         val width = image.width
         val height = image.height
         val array = Array(height) { Array(width) { 0 } }

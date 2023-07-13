@@ -1,3 +1,4 @@
+@file:Suppress("SpellCheckingInspection", "SpellCheckingInspection")
 // Entry point
 // Author: Bogdan M. Kirilenko, 2023
 

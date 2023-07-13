@@ -3,7 +3,7 @@ import java.io.File
 import kotlin.system.exitProcess
 
 
-class LameCompressor() {
+class LameCompressor {
     private val pathToLame: String = getPathToLame()
 
     fun compressFile(inputFile: File, outputFile: File, channelNum: Int) {
@@ -23,7 +23,7 @@ class LameCompressor() {
                 .append(" ${outputFile.absolutePath}")
                 .toString()
 
-        println("Started $command")
+        println("(channel $channelNum): started $command")
         val process = ProcessBuilder(*command.split(" ").toTypedArray())
 //            .redirectOutput(ProcessBuilder.Redirect.INHERIT)
 //            .redirectError(ProcessBuilder.Redirect.INHERIT)
@@ -34,7 +34,7 @@ class LameCompressor() {
     fun decompressFile(inputFile: File, outputFile: File, channelNum: Int){
         // decompress given mp3 file - get sort of uncompressed "wav"
         val command = "$pathToLame -S --decode --brief -x -t ${inputFile.absolutePath} ${outputFile.absolutePath}"
-        println("Started $command")
+        println("(channel $channelNum): started  $command")
 
         val process = ProcessBuilder(*command.split(" ").toTypedArray())
 //            .redirectOutput(ProcessBuilder.Redirect.INHERIT)
