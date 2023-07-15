@@ -6,8 +6,13 @@ class GleitzschApp {
     private val imagePreprocessor = ImagePreprocessor()
     private val imageOperations = ImageOperations()
     private val lameCompressor = LameCompressor()
-    private val gleitzschOperator = GleitzschOperator(imageOperations, lameCompressor)
     private val argsParser = GleitzschArgsParser()
+    private val imageFilters = ImageFilters(imageOperations)
+    private val gleitzschOperator = GleitzschOperator(
+        imageOperations,
+        lameCompressor,
+        imageFilters
+    )
 
     fun run(args: Array<String>) {
         val gleitzschArgs = argsParser.parse(args)
@@ -23,6 +28,9 @@ class GleitzschApp {
                 preprocessedImage,
                 gleitzschArgs
         )
-        imageIO.saveImage(resultImage, gleitzschArgs.outputImagePath) // Use imageIO to save the result
+        imageIO.saveImage(
+            resultImage,
+            gleitzschArgs.outputImagePath
+        )
     }
 }

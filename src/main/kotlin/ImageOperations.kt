@@ -8,7 +8,6 @@ class ImageOperations {
         require(channel in 0..2) { "Channel must be between 0 and 2" }
         val width = imageArr.size
         val height = imageArr[0].size
-
         return Array(width) { i ->
             Array(height) { j ->
                 imageArr[i][j][channel]

@@ -14,6 +14,13 @@ The main Gleitzsch's core operational steps include:
 The process of image-to-audio and back-to-image transformation results in visually striking glitch effects,
  turning (it we are lucky enough) everyday images into digital art pieces.
 
+Reimplementation of my previous Python-based Gleitzsch [1](https://github.com/kirilenkobm/gleitzsch) and [4](https://github.com/kirilenkobm/gleitzsch_v4) projects.
+
+## Future plans
+
+* Implementing web interface
+* Adding additional filters
+* Module to additionally distort the intermediate mp3 file(s)
 
 ## Getting Started
 
