@@ -55,14 +55,14 @@ class GleitzschArgsParser {
             description = "Size of the processed image (long dimension, default $DEFAULT_IMAGE_SIZE)"
         ).default(DEFAULT_IMAGE_SIZE)
 
+        val defaultTempDir = createTempDir().toFile().absolutePath
         val tempDirArg by parser.option(
             ArgType.String,
             description = """
             Define temp directory. If provided by you -
             the intermediate files will not be deleted
             """
-        )
-        val tempDir = tempDirArg ?: createTempDir().toFile().absolutePath
+        ).default(defaultTempDir)
 
         val rgbShift by parser.option(
             ArgType.Int,
@@ -94,7 +94,7 @@ class GleitzschArgsParser {
             inputImagePath,
             outputImagePath,
             imageSize,
-            tempDir,
+            tempDirArg,
             rgbShift,
             gammaParam,
             leftPercentile,

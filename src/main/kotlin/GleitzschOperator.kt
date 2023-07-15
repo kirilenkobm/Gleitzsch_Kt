@@ -18,7 +18,7 @@ class GleitzschOperator(
 {
     // Your Gleitzsch operation methods go here
     fun apply(image: BufferedImage, args: GleitzschArgs): BufferedImage {
-        // val origRgbArray = imageOperations.imageTo3DArray(image)
+        // TODO: combine filters into imagePreprocessor functior
         val imageWithRGBshift = imageFilters.applyRgbShiftChannel(image, args.rgbShift)
         val gleitzschedArr = doGleitzsch(imageWithRGBshift, args.tempDir)
         // the output has dramatically low contrast -> need to enhance it for aesthetic reasons
