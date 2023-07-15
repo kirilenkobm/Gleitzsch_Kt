@@ -10,6 +10,9 @@ JAR_PATH = "out/artifacts/Gleitzsch_Kt_jar/Gleitzsch_Kt.jar"
 
 
 def main():
+    """Entry point."""
+    # if additional arguments to test on glitcher are provided:
+    glitcher_args = sys.argv[1:] if len(sys.argv) > 1 else None
     input_filenames = [fname for fname in os.listdir(INPUT_IMAGES_DIR) if fname.endswith(".jpg")]
     print(f"# {len(input_filenames)} images to process")
     t0 = dt.now()
@@ -24,6 +27,9 @@ def main():
             os.path.join(INPUT_IMAGES_DIR, input_filename),
             os.path.join(OUTPUT_IMAGES_DIR, input_filename),
         ]
+        if glitcher_args:
+            command.extend(glitcher_args)
+
         process = subprocess.run(command, check=True, stdout=sys.stdout, stderr=sys.stderr)
         image_processing_time = dt.now() - start_time
         print(f"# Image processed in: {image_processing_time}")
